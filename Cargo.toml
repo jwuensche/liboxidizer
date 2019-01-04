@@ -1,0 +1,9 @@
+[package]
+name = "liboxidizer"
+version = "0.1.0"
+authors = ["Johannes Wünsche <johannes.wuensche97@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+websocket = "^0.22.1"
+failure = "^0.1.5"
