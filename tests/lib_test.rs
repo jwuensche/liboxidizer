@@ -6,6 +6,8 @@ mod common;
 #[test]
 fn test_connection() {
     common::main();
+
+    //just a short period to wait for thread without communication
     let seconds = time::Duration::from_secs(1);
     thread::sleep(seconds);
 
