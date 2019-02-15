@@ -1,7 +1,4 @@
-mod common;
-
-#[test]
-fn test_connection() {
+fn main() {
     //common::main();
 
     //just a short period to wait for thread without communication

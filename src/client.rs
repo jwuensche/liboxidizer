@@ -1,5 +1,6 @@
 use crate::error::LoxError;
-use crate::protos;
+
+use crate::krpc::{ProcedureCall, Request, Response, Status};
 
 pub struct Client {
     name: String,
@@ -28,22 +29,29 @@ impl Client {
         }
     }
 
-    pub fn send(&self, msg: protos::Request) {
-        //let vec: Vec<u8> = Vec::new();
-        //let stream = protobuf::CodedOutputStream::vec(&mut vec);
+    pub fn send(&mut self, msg: &Request) -> Result<Response, LoxError>{
+        let mg = msg as &protobuf::Message;
+        let res = mg.write_to_bytes().unwrap();
 
-        //msg.write_to_with_cached_sizes(stream);
-        //stream.flush();
+        let ws_msg = websocket::Message::binary(res);
+        self.connection.send_message(&ws_msg).unwrap();
+        let resp = self.connection.recv_message().unwrap();
+        assert!(resp.is_data());
+        let resp_msg = websocket::Message::from(resp);
 
-        //let ws_msg = websocket::Message::binary(vec);
-        //self.connection.send_message(&ws_msg);
+        let resp_content: Response = protobuf::parse_from_bytes(&*resp_msg.payload).unwrap();
+        Ok(resp_content)
     }
 
-    pub fn get_status(&self) {
-        //let mut foo = protos::Request::new();
-        //let bar = protos::ProcedureCall::new();
-        //bar.service = String::from("KRPC");
-        //bar.procedure = String::from("GetStatus");
-        //foo.calls.push(bar);
+    pub fn get_status(&mut self) -> Result<Status, LoxError> {
+        let mut foo = Request::new();
+        let mut bar = ProcedureCall::new();
+        bar.service = String::from("KRPC");
+        bar.procedure = String::from("GetStatus");
+        foo.calls.push(bar);
+
+        let result = self.send(&foo).unwrap();
+        let status: Status = protobuf::parse_from_bytes(&result.results[0].value).unwrap();
+        Ok(status)
     }
 }
