@@ -10,7 +10,6 @@ pub fn main() {
 	      for request in server.filter_map(Result::ok) {
 		        thread::spawn(move || {
 			          let _client = request.accept().unwrap();
-
 		        });
         }});
 	}

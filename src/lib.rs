@@ -1,5 +1,4 @@
 #[macro_use] extern crate failure;
-extern crate serde;
 use self::error::LoxError;
 
 mod client;

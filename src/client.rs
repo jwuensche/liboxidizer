@@ -1,6 +1,6 @@
 use crate::error::LoxError;
 
-use crate::krpc::{ProcedureCall, Request, Response, Status};
+use crate::krpc::{ProcedureCall, Request, Response, Status, Argument, Parameter};
 
 pub struct Client {
     name: String,
@@ -14,7 +14,6 @@ impl Client {
             Ok(mut c) => {
                 match c.connect_insecure() {
                     Ok(streamresult) => {
-                        println!("It works!");
                         let cl = Client{name: String::from(name), connection: streamresult};
                         Ok(cl)
                     },
@@ -29,29 +28,92 @@ impl Client {
         }
     }
 
-    pub fn send(&mut self, msg: &Request) -> Result<Response, LoxError>{
+    fn send(&mut self, msg: &Request) -> Result<Response, LoxError>{
         let mg = msg as &protobuf::Message;
-        let res = mg.write_to_bytes().unwrap();
-
+        match mg.write_to_bytes() {
+            Ok(res) => {
         let ws_msg = websocket::Message::binary(res);
-        self.connection.send_message(&ws_msg).unwrap();
-        let resp = self.connection.recv_message().unwrap();
-        assert!(resp.is_data());
-        let resp_msg = websocket::Message::from(resp);
+        let send = self.connection.send_message(&ws_msg);
+        match send {
+            Ok(_c) => {
+                let resp = self.connection.recv_message();
+                match resp {
+                    Ok(resp_content) => {
+                        let resp_msg = websocket::Message::from(resp_content);
+                        let deserialized = protobuf::parse_from_bytes(&*resp_msg.payload);
+                        match deserialized {
+                            Ok(c) => {
+                                Ok(c)
+                            }
+                            Err(e) => {
+                                Err(LoxError::InvalidResponse{content: format!("{}", e)})
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        Err(LoxError::FailureOnReceive{content: format!("{}", e)})
+                    }
+                }
+            },
+            Err(e) => {
+                Err(LoxError::FailureOnSend{content: format!("{}", e)})
+            }
+        }
+            }
+            Err(_e) => {
+                Err(LoxError::InvalidRequest{})
+            }
+        }
 
-        let resp_content: Response = protobuf::parse_from_bytes(&*resp_msg.payload).unwrap();
-        Ok(resp_content)
+    }
+
+    fn create_req(&self, service: &str, procedure: &str, arg: protobuf::RepeatedField<Argument>) -> Request {
+        let mut req = Request::new();
+        let mut call = ProcedureCall::new();
+
+        call.service = service.to_string();
+        call.procedure = procedure.to_string();
+        call.arguments = arg;
+        req.calls.push(call);
+
+        return req
     }
 
     pub fn get_status(&mut self) -> Result<Status, LoxError> {
-        let mut foo = Request::new();
-        let mut bar = ProcedureCall::new();
-        bar.service = String::from("KRPC");
-        bar.procedure = String::from("GetStatus");
-        foo.calls.push(bar);
+        let req = self.create_req("KRPC", "GetStatus", protobuf::RepeatedField::default());
+        match self.send(&req) {
+            Ok(result) => {
+                match protobuf::parse_from_bytes(&result.results[0].value) {
+                    Ok(c) => {
+                        Ok(c)
+                    }
+                    Err(e) => {
+                        Err(LoxError::InvalidResponse{content: format!("{}", e)})
+                    }
+                }
+            }
+            Err(e) => {
+                Err(e)
+            }
+        }
+    }
 
-        let result = self.send(&foo).unwrap();
-        let status: Status = protobuf::parse_from_bytes(&result.results[0].value).unwrap();
-        Ok(status)
+    pub fn get_client_name(&mut self) -> Result<Parameter, LoxError> {
+        let req = self.create_req("KRPC", "GetClientName", protobuf::RepeatedField::default());
+        match self.send(&req) {
+            Ok(result) => {
+                match protobuf::parse_from_bytes(&result.results[0].value) {
+                    Ok(c) => {
+                        Ok(c)
+                    }
+                    Err(e) => {
+                        Err(LoxError::InvalidResponse{content: format!("{}", e)})
+                    }
+                }
+            }
+            Err(e) => {
+                Err(e)
+            }
+        }
     }
 }
