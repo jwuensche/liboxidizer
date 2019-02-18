@@ -98,8 +98,8 @@ impl Client {
         }
     }
 
-    pub fn get_client_name(&mut self) -> Result<Parameter, LoxError> {
-        let req = self.create_req("KRPC", "GetClientName", protobuf::RepeatedField::default());
+    fn get_parameter(&mut self, service: &str, procedure: &str, arg: protobuf::RepeatedField<Argument>) -> Result<Parameter, LoxError> {
+        let req = self.create_req(service, procedure, arg);
         match self.send(&req) {
             Ok(result) => {
                 match protobuf::parse_from_bytes(&result.results[0].value) {
@@ -116,4 +116,13 @@ impl Client {
             }
         }
     }
+
+    pub fn get_client_name(&mut self) -> Result<Parameter, LoxError> {
+        return self.get_parameter("KRPC", "GetClientName", protobuf::RepeatedField::default())
+    }
+
+    pub fn get_client_id(&mut self) -> Result<Parameter, LoxError> {
+        return self.get_parameter("KRPC", "GetClientID", protobuf::RepeatedField::default())
+    }
+
 }
