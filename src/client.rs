@@ -1,13 +1,18 @@
-use crate::error::LoxError;
+mod vessel;
 
-use crate::krpc::{ProcedureCall, Request, Response, Status, Argument, Parameter};
+use crate::error::LoxError;
+use self::vessel::Vessel;
+use crate::byteorder::{BigEndian, ReadBytesExt};
+use crate::krpc::{ProcedureCall, Request, Response, Status, Argument};
+
 
 pub struct Client {
     name: String,
     connection: websocket::client::sync::Client<websocket::stream::sync::TcpStream>,
 }
 
-impl Client {
+impl<'a> Client {
+
     pub fn new(name: &str, address: &str) -> Result<Client, LoxError> {
         let builder = websocket::ClientBuilder::new(format!("{}{}{}", address, "/?name=", name).as_str());
         match builder {
@@ -98,16 +103,27 @@ impl Client {
         }
     }
 
-    fn get_parameter(&mut self, service: &str, procedure: &str, arg: protobuf::RepeatedField<Argument>) -> Result<Parameter, LoxError> {
+    fn get_parameter(&mut self, service: &str, procedure: &str, arg: protobuf::RepeatedField<Argument>) -> Result<Box<std::vec::Vec<u8>>, LoxError> {
         let req = self.create_req(service, procedure, arg);
         match self.send(&req) {
-            Ok(result) => {
-                match protobuf::parse_from_bytes(&result.results[0].value) {
+            Ok(mut result) => {
+                Ok(Box::new(result.results[0].take_value()))
+            }
+            Err(e) => {
+                Err(e)
+            }
+        }
+    }
+
+    pub fn get_client_name(&mut self) -> Result<Box<std::string::String>, LoxError> {
+        match self.get_parameter("KRPC", "GetClientName", protobuf::RepeatedField::default()) {
+            Ok(val) => {
+                match String::from_utf8(*val) {
                     Ok(c) => {
-                        Ok(c)
+                        Ok(Box::new(c))
                     }
                     Err(e) => {
-                        Err(LoxError::InvalidResponse{content: format!("{}", e)})
+                        Err(LoxError::UnknownBytes{content: format!("{}", e)})
                     }
                 }
             }
@@ -117,12 +133,50 @@ impl Client {
         }
     }
 
-    pub fn get_client_name(&mut self) -> Result<Parameter, LoxError> {
-        return self.get_parameter("KRPC", "GetClientName", protobuf::RepeatedField::default())
+    pub fn get_client_id(&mut self) -> Result<Box<std::string::String>, LoxError> {
+        match self.get_parameter("KRPC", "GetClientID", protobuf::RepeatedField::default()) {
+            Ok(val) => {
+                let mut rdr = std::io::Cursor::new(*val);
+                match rdr.read_u16::<BigEndian>(){
+                    Ok(c) => {
+                        Ok(Box::new(c.to_string()))
+                    }
+                    Err(e) => {
+                        Err(LoxError::UnknownBytes{content: format!("{}", e)})
+                    }
+                }
+            }
+            Err(e) => {
+                Err(e)
+            }
+        }
     }
 
-    pub fn get_client_id(&mut self) -> Result<Parameter, LoxError> {
-        return self.get_parameter("KRPC", "GetClientID", protobuf::RepeatedField::default())
+    pub fn get_active_vessel(&mut self) -> Result<Vessel, LoxError> {
+        match self.get_parameter("KRPC", "get_ActiveVessel", protobuf::RepeatedField::default()) {
+            Ok(val) => {
+                Ok(Vessel::new(self, *val))
+            }
+            Err(_e) => {
+                Err(LoxError::GenericError{content: "Foo".to_string()})
+            }
+        }
+    }
+
+    pub fn save(&mut self, name: &str) -> Result<bool, LoxError> {
+        let mut arg = protobuf::RepeatedField::new();
+        let mut arg1 = Argument::new();
+        arg1.set_position(0);
+        arg1.set_value((*name.as_bytes()).to_vec());
+        arg.push(arg1);
+        match self.get_parameter("SpaceCenter", "Save", arg) {
+            Ok(_v) => {
+                Ok(true)
+            }
+            Err(e) => {
+                Err(LoxError::GenericError{content: format!("{}", e)})
+            }
+        }
     }
 
 }

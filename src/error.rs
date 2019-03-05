@@ -24,5 +24,9 @@ pub enum LoxError {
         content: String,
     },
     #[fail(display = "request of unknown type")]
-    InvalidRequest {}
+    InvalidRequest {},
+    #[fail(display = "bytes non interpretable: {}", content)]
+    UnknownBytes {
+        content: String,
+    }
 }

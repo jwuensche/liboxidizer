@@ -7,8 +7,9 @@ fn main() {
     // Methods can then be called which execute calls to krpc, like get_status
     let result = client.get_status().unwrap();
     let name = client.get_client_name().unwrap();
+    let id = client.get_client_id().unwrap();
 
-    println!("client connected: {}", name.name);
+    println!("client connected: {}, with id: {}", name, id);
     println!("version: {}", result.version);
     println!("bytes read: {}", result.bytes_read);
     println!("bytes written: {}", result.bytes_written);

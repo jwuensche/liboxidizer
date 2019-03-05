@@ -1,4 +1,6 @@
 #[macro_use] extern crate failure;
+extern crate byteorder;
+
 use self::error::LoxError;
 
 mod client;
